@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, TypedDict
+from typing import Any, List, Optional, TypedDict
+
+import io
+import sys
+import warnings
+from contextlib import redirect_stderr, redirect_stdout
 
 from langchain.schema import BaseMessage, HumanMessage
 
@@ -34,30 +39,55 @@ class Task:
             The user prompt to send to the model.
         model:
             Optional LangChain chat model. If ``None`` a default
-            :class:`langchain.chat_models.ChatOpenAI` model is used.
+            :class:`langchain_openai.ChatOpenAI` model is used.
         """
 
-        if model is None:
-            from langchain.chat_models import ChatOpenAI
-            model = ChatOpenAI()
+        class _Tee:
+            def __init__(self, *streams):
+                self.streams = streams
 
-        from langgraph.graph import StateGraph, END
+            def write(self, data: str) -> int:
+                for s in self.streams:
+                    s.write(data)
+                return len(data)
 
-        class ChatState(TypedDict):
-            messages: List[BaseMessage]
+            def flush(self) -> None:  # pragma: no cover - passthrough
+                for s in self.streams:
+                    s.flush()
 
-        def call_model(state: ChatState) -> ChatState:
-            response = model.invoke(state["messages"])
-            return {"messages": state["messages"] + [response]}
+        buffer = io.StringIO()
+        tee_out = _Tee(sys.stdout, buffer)
+        tee_err = _Tee(sys.stderr, buffer)
 
-        graph = StateGraph(ChatState)
-        graph.add_node("model", call_model)
-        graph.add_edge("model", END)
-        graph.set_entry_point("model")
-        app = graph.compile()
+        with warnings.catch_warnings(), redirect_stdout(tee_out), redirect_stderr(tee_err):
+            warnings.simplefilter("default")
 
-        result = app.invoke({"messages": [HumanMessage(content=prompt)]})
+            if model is None:
+                from langchain_openai import ChatOpenAI
+                model = ChatOpenAI()
+
+            from langgraph.graph import StateGraph, END
+
+            class ChatState(TypedDict):
+                messages: List[BaseMessage]
+
+            def call_model(state: ChatState) -> ChatState:
+                response = model.invoke(state["messages"])
+                return {"messages": state["messages"] + [response]}
+
+            graph = StateGraph(ChatState)
+            graph.add_node("model", call_model)
+            graph.add_edge("model", END)
+            graph.set_entry_point("model")
+            app = graph.compile()
+
+            result = app.invoke({"messages": [HumanMessage(content=prompt)]})
+
         response = result["messages"][-1].content
+
+        captured = buffer.getvalue().strip()
+        if captured:
+            self.append_log(captured)
 
         self.append_chat("user", prompt)
         self.append_chat("assistant", response)
