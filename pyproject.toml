@@ -1,0 +1,14 @@
+[project]
+name = "vibe_bfx"
+version = "0.1.0"
+description = "Simple agentic vibe bioinformatics framework"
+authors = [{name = "VibeBfx"}]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "langchain",
+    "langgraph",
+]
+
+[project.scripts]
+vibe-bfx = "vibe_bfx.cli:main"
