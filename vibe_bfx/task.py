@@ -25,7 +25,7 @@ class Task:
         with self.log_file.open("a", encoding="utf-8") as fh:
             fh.write(entry + "\n")
 
-    def run_chat(self, prompt: str, model=None) -> str:
+    def run_chat(self, prompt: str, model: Optional[Any] = None) -> str:
         """Run a single chat turn using LangChain and LangGraph.
 
         Parameters
