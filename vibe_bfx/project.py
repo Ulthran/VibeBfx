@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Any, Iterable, Optional
+
+import csv
+from typing import List
+
+import yaml
 
 from .task import Task
 
@@ -19,6 +24,26 @@ class Project:
     def __init__(self, path: str | Path):
         self.path = Path(path)
         self.path.mkdir(parents=True, exist_ok=True)
+        self.metadata_path = self.path / "metadata.csv"
+        self.config_path = self.path / "config.yaml"
+        self.output_dir = self.path / "output"
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.metadata = self._load_metadata()
+        self.config = self._load_config()
+
+    def _load_metadata(self) -> List[dict[str, str]]:
+        if self.metadata_path.exists():
+            with self.metadata_path.open("r", encoding="utf-8") as fh:
+                reader = csv.DictReader(fh)
+                return list(reader)
+        return []
+
+    def _load_config(self) -> dict[str, Any]:
+        if self.config_path.exists():
+            with self.config_path.open("r", encoding="utf-8") as fh:
+                data = yaml.safe_load(fh)
+            return data or {}
+        return {}
 
     def create_task(self, name: str) -> Task:
         """Create and return a task within this project."""
@@ -36,5 +61,5 @@ class Project:
     def list_tasks(self) -> Iterable[str]:
         """Yield the names of tasks in this project."""
         for p in sorted(self.path.iterdir()):
-            if p.is_dir():
+            if p.is_dir() and p != self.output_dir and not p.name.startswith('.'):
                 yield p.name
