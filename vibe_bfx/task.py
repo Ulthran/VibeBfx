@@ -45,14 +45,14 @@ class Task:
             The user prompt to send to the model.
         model:
             Optional LangChain chat model. If ``None`` a default
-            :class:`langchain_openai.ChatOpenAI` model is used.
+            :class:`langchain_community.chat_models.ChatOpenAI` model is used.
         """
 
         logging.captureWarnings(True)
         warnings.simplefilter("default")
 
         if model is None:
-            from langchain_openai import ChatOpenAI
+            from langchain_community.chat_models import ChatOpenAI
             model = ChatOpenAI()
 
         from langgraph.graph import StateGraph, END
