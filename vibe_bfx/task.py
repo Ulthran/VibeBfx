@@ -5,11 +5,10 @@ from typing import Any, List, Optional, TypedDict
 
 import logging
 from datetime import datetime
-import warnings
 
 from langchain.schema import BaseMessage, HumanMessage
-from langgraph import END, StateGraph
-from langchain_openai import ChatOpenAI
+from langgraph.graph import END, START, StateGraph
+from langchain_community import ChatOpenAI
 
 
 class Task:
@@ -50,9 +49,6 @@ class Task:
             :class:`langchain_community.chat_models.ChatOpenAI` model is used.
         """
 
-        logging.captureWarnings(True)
-        warnings.simplefilter("default")
-
         if model is None:
             model = ChatOpenAI(
                 model="gpt-4o",
@@ -75,20 +71,15 @@ class Task:
             handler.setFormatter(formatter)
 
             logger = logging.getLogger(node)
-            logger.setLevel(logging.INFO)
+            logger.setLevel(logging.DEBUG)
             logger.propagate = False
             logger.addHandler(handler)
-
-            warn_logger = logging.getLogger("py.warnings")
-            warn_logger.propagate = False
-            warn_logger.addHandler(handler)
 
             try:
                 logger.info("Prompt: %s", state["messages"][-1].content)
                 response = model.invoke(state["messages"])
                 logger.info("Response: %s", response.content)
             finally:
-                warn_logger.removeHandler(handler)
                 logger.removeHandler(handler)
                 handler.close()
                 self.append_log_reference(node, log_path, ts)
