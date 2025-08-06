@@ -8,12 +8,20 @@ from datetime import datetime
 from contextlib import contextmanager
 
 from langchain.schema import BaseMessage, HumanMessage
-from langgraph.graph import END, START, StateGraph
-from langchain_openai import ChatOpenAI
+from langgraph.graph import END, StateGraph
 
 
 class ChatState(TypedDict):
     messages: List[BaseMessage]
+
+
+class PlanState(TypedDict):
+    prompt: str
+    plan: List[dict] | None
+    step_index: int
+    current_step: dict | None
+    last_result: Any | None
+    reports: List[str]
 
 
 class Task:
@@ -88,12 +96,82 @@ class Task:
         inputs: Dict[str, Any],
         params: Dict[str, Any] | None = None,
     ) -> str:
-        """Run a planner-driven task using ``tool`` and record chat/logs."""
-        from .agents import Planner  # local import to avoid circular dependency
+        """Run a planner-driven task using a LangGraph workflow."""
+
+        from .agents import Analyzer, Planner, Runner
 
         self.append_chat("user", prompt)
+
         planner = Planner(self)
-        report = planner.run(tool=tool, inputs=inputs, params=params)
+        runner = Runner()
+        analyzer = Analyzer()
+
+        def plan_node(state: PlanState) -> PlanState:
+            if state["plan"] is None:
+                plan = self.run_agent(
+                    "planner",
+                    planner.plan,
+                    state["prompt"],
+                    tool=tool,
+                    inputs=inputs,
+                    params=params,
+                    result_label="plan",
+                )
+            else:
+                plan = self.run_agent(
+                    "planner",
+                    planner.replan,
+                    state["plan"],
+                    state["reports"],
+                    result_label="plan",
+                )
+            if state["step_index"] >= len(plan):
+                return {**state, "plan": plan, "current_step": None}
+            step = plan[state["step_index"]]
+            return {**state, "plan": plan, "current_step": step}
+
+        def runner_node(state: PlanState) -> PlanState:
+            result = self.run_agent(
+                "runner", runner.run, state["current_step"], result_label="result"
+            )
+            return {**state, "last_result": result}
+
+        def analyzer_node(state: PlanState) -> PlanState:
+            report = self.run_agent(
+                "analyzer",
+                analyzer.analyze,
+                state["current_step"],
+                state["last_result"],
+                result_label="report",
+            )
+            reports = state["reports"] + [report]
+            return {**state, "reports": reports, "step_index": state["step_index"] + 1}
+
+        def route_from_planner(state: PlanState) -> str:
+            return "runner" if state.get("current_step") else END
+
+        graph = StateGraph(PlanState)
+        graph.add_node("planner", plan_node)
+        graph.add_node("runner", runner_node)
+        graph.add_node("analyzer", analyzer_node)
+        graph.add_conditional_edges("planner", route_from_planner)
+        graph.add_edge("runner", "analyzer")
+        graph.add_edge("analyzer", "planner")
+        graph.set_entry_point("planner")
+        app = graph.compile()
+
+        final_state = app.invoke(
+            {
+                "prompt": prompt,
+                "plan": None,
+                "step_index": 0,
+                "current_step": None,
+                "last_result": None,
+                "reports": [],
+            }
+        )
+
+        report = "\n".join(final_state["reports"])
         self.append_chat("assistant", report)
         return report
 
@@ -106,10 +184,12 @@ class Task:
             The user prompt to send to the model.
         model:
             Optional LangChain chat model. If ``None`` a default
-            :class:`langchain_community.chat_models.ChatOpenAI` model is used.
+            :class:`langchain_openai.ChatOpenAI` model is used.
         """
 
         if model is None:
+            from langchain_openai import ChatOpenAI
+
             model = ChatOpenAI(
                 model="gpt-4o",
                 temperature=0.1,
