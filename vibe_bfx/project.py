@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any, Iterable, Optional
 
 import csv
+import logging
 from typing import List
 
 import yaml
@@ -21,6 +22,21 @@ class Project:
         created automatically.
     """
 
+    # Reserved configuration keys and their default values. These are
+    # automatically populated in ``project.config`` to provide a stable API
+    # regardless of whether users explicitly set them in ``config.yaml``.
+    _RESERVED_CONFIG_DEFAULTS: dict[str, Any] = {
+        "db_fp": None,
+        "conda_fp": None,
+        "docker_fp": None,
+        "singularity_fp": None,
+        # The column names in ``metadata.csv`` that correspond to the sample ID
+        # and the R1 fastq path. Users may override these in ``config.yaml`` if
+        # their metadata file uses non-standard column names.
+        "sample_id_field_name": "sample_id",
+        "r1_fp_field_name": "r1_fp",
+    }
+
     def __init__(self, path: str | Path):
         self.path = Path(path)
         self.path.mkdir(parents=True, exist_ok=True)
@@ -30,6 +46,10 @@ class Project:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.metadata = self._load_metadata()
         self.config = self._load_config()
+        # Ensure all reserved keys are present in the configuration with their
+        # default values.
+        for key, default in self._RESERVED_CONFIG_DEFAULTS.items():
+            self.config.setdefault(key, default)
 
     def _load_metadata(self) -> List[dict[str, str]]:
         if self.metadata_path.exists():
@@ -44,6 +64,30 @@ class Project:
                 data = yaml.safe_load(fh)
             return data or {}
         return {}
+
+    def iter_samples(self) -> Iterable[dict[str, str]]:
+        """Yield dictionaries containing ``sample_id`` and ``r1_fp`` for each
+        record in the metadata.
+
+        The ``sample_id`` and ``r1_fp`` column names can be overridden via the
+        ``sample_id_field_name`` and ``r1_fp_field_name`` configuration keys.
+        """
+
+        sample_key = self.config["sample_id_field_name"]
+        r1_key = self.config["r1_fp_field_name"]
+        skipped: list[int] = []
+        for idx, row in enumerate(self.metadata, 1):
+            sample = row.get(sample_key)
+            r1 = row.get(r1_key)
+            if sample and r1:
+                yield {"sample_id": sample, "r1_fp": r1}
+            else:
+                skipped.append(idx)
+        if skipped:
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                "Skipped metadata rows missing required fields: %s", skipped
+            )
 
     def create_task(self, name: str) -> Task:
         """Create and return a task within this project."""
