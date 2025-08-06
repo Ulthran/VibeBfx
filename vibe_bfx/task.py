@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, List, Optional, TypedDict
+from typing import Any, Callable, Dict, List, Optional, TypedDict
 
 import logging
 from datetime import datetime
+from contextlib import contextmanager
 
 from langchain.schema import BaseMessage, HumanMessage
 from langgraph.graph import END, START, StateGraph
@@ -41,6 +42,61 @@ class Task:
         with self.log_file.open("a", encoding="utf-8") as fh:
             fh.write(f"{timestamp} {node}: {rel.as_posix()}\n")
 
+    @contextmanager
+    def log_context(self, node: str):
+        """Context manager yielding a logger writing to the task's logs directory."""
+        ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+        log_path = self.logs_dir / f"{ts}_{node}.log"
+
+        handler = logging.FileHandler(log_path)
+        formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+        handler.setFormatter(formatter)
+
+        logger = logging.getLogger(f"{node}-{ts}")
+        logger.setLevel(logging.DEBUG)
+        logger.propagate = False
+        logger.addHandler(handler)
+
+        try:
+            yield logger
+        finally:
+            logger.removeHandler(handler)
+            handler.close()
+            self.append_log_reference(node, log_path, ts)
+
+    def run_agent(
+        self,
+        node: str,
+        func: Callable[..., Any],
+        *args: Any,
+        result_label: str = "result",
+        **kwargs: Any,
+    ) -> Any:
+        """Run ``func`` with logging and return its result."""
+        with self.log_context(node) as logger:
+            if args or kwargs:
+                logger.info("inputs: args=%s kwargs=%s", args, kwargs)
+            result = func(*args, **kwargs)
+            logger.info(f"{result_label}: %s", result)
+        return result
+
+    def run(
+        self,
+        prompt: str,
+        tool: Callable[..., Any],
+        *,
+        inputs: Dict[str, Any],
+        params: Dict[str, Any] | None = None,
+    ) -> str:
+        """Run a planner-driven task using ``tool`` and record chat/logs."""
+        from .agents import Planner  # local import to avoid circular dependency
+
+        self.append_chat("user", prompt)
+        planner = Planner(self)
+        report = planner.run(tool=tool, inputs=inputs, params=params)
+        self.append_chat("assistant", report)
+        return report
+
     def run_chat(self, prompt: str, model: Optional[Any] = None) -> str:
         """Run a single chat turn using LangChain and LangGraph.
 
@@ -63,28 +119,12 @@ class Task:
             )
 
         def call_model(state: ChatState) -> ChatState:
-            node = "model"
-            ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-            log_path = self.logs_dir / f"{ts}_{node}.log"
-
-            handler = logging.FileHandler(log_path)
-            formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
-            handler.setFormatter(formatter)
-
-            logger = logging.getLogger(node)
-            logger.setLevel(logging.DEBUG)
-            logger.propagate = False
-            logger.addHandler(handler)
-
-            try:
-                logger.info("Prompt: %s", state["messages"][-1].content)
-                response = model.invoke(state["messages"])
-                logger.info("Response: %s", response.content)
-            finally:
-                logger.removeHandler(handler)
-                handler.close()
-                self.append_log_reference(node, log_path, ts)
-
+            response = self.run_agent(
+                "model",
+                model.invoke,
+                state["messages"],
+                result_label="response",
+            )
             return {"messages": state["messages"] + [response]}
 
         graph = StateGraph(ChatState)
