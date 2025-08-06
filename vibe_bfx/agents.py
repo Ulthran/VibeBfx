@@ -1,69 +1,71 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Dict
+"""Core agent implementations used by the task graph."""
+
+from typing import Any, Callable, Dict, List, TypedDict
+
+
+class Step(TypedDict, total=False):
+    """Representation of a single unit of work in a plan."""
+
+    description: str
+    tool: Callable[..., Any]
+    inputs: Dict[str, Any]
+    params: Dict[str, Any]
+    notes: str
 
 
 class Runner:
-    """Run a tool with specified inputs and parameters."""
+    """Execute the command defined by a plan step."""
 
-    def run(
-        self,
-        tool: Callable[..., Any],
-        *,
-        inputs: Dict[str, Any],
-        params: Dict[str, Any] | None = None,
-    ) -> Any:
-        params = params or {}
+    def run(self, step: Step) -> Any:
+        tool = step["tool"]
+        inputs = step.get("inputs", {})
+        params = step.get("params", {})
         return tool(**inputs, **params)
 
 
-class Analyst:
-    """Analyze results and produce a textual report."""
+class Analyzer:
+    """Analyze step results and produce a report string."""
 
-    def analyze(self, result: Any) -> str:
-        return f"Result: {result}"
+    def analyze(self, step: Step, result: Any) -> str:
+        desc = step.get("description", "Step")
+        return f"{desc}: {result}"
 
 
 class Planner:
-    """Assign units of work on a :class:`~vibe_bfx.task.Task` to worker agents."""
+    """Create and iteratively refine a plan for a task."""
 
     def __init__(self, task: "Task"):
         self.task = task
-        self.executor = Executor()
-        self.env_manager = EnvironmentManager()
-        self.analyst = Analyst()
 
-    def run(
+    def plan(
         self,
-        tool: Callable[..., Any],
+        prompt: str,
         *,
+        tool: Callable[..., Any],
         inputs: Dict[str, Any],
         params: Dict[str, Any] | None = None,
-    ) -> str:
-        tool_name = getattr(tool, "__name__", "tool")
-        with self.task.log_context("planner") as logger:
-            logger.info("plan: run %s with inputs %s", tool_name, inputs)
-            env = self.task.run_agent(
-                "environment",
-                self.env_manager.prepare,
-                tool_name,
-                result_label="environment",
-            )
-            logger.info("environment: %s", env)
-            result = self.task.run_agent(
-                "executor",
-                self.executor.run,
-                tool,
-                inputs=inputs,
-                params=params,
-                result_label="execution result",
-            )
-            logger.info("execution result: %s", result)
-            report = self.task.run_agent(
-                "analyst",
-                self.analyst.analyze,
-                result,
-                result_label="analysis",
-            )
-            logger.info("analysis: %s", report)
-        return report
+    ) -> List[Step]:
+        params = params or {}
+        return [
+            {
+                "description": prompt,
+                "tool": tool,
+                "inputs": inputs,
+                "params": params,
+                "notes": "",
+            }
+        ]
+
+    def replan(self, plan: List[Step], reports: List[str]) -> List[Step]:
+        """Re-evaluate the plan given completed step reports.
+
+        The default implementation simply returns the existing plan unchanged.
+        """
+
+        return plan
+
+
+__all__ = ["Step", "Runner", "Analyzer", "Planner"]
+

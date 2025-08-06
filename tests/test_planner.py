@@ -9,7 +9,7 @@ def add(a: int, b: int) -> int:
     return a + b
 
 
-def test_planner_uses_workers(tmp_path: Path) -> None:
+def test_planner_runs_steps(tmp_path: Path) -> None:
     project = Project(tmp_path / "proj")
     task = project.create_task("t1")
     report = task.run(
@@ -18,23 +18,22 @@ def test_planner_uses_workers(tmp_path: Path) -> None:
         inputs={"a": 1, "b": 2},
     )
 
-    assert "Result: 3" in report
+    assert "add numbers: 3" in report
 
     chat_text = task.chat_file.read_text()
     assert "user: add numbers" in chat_text
-    assert "assistant: Result: 3" in chat_text
+    assert "assistant: add numbers: 3" in chat_text
 
     # log references
     refs = task.log_file.read_text().splitlines()
     assert any("planner" in r for r in refs)
-    assert any("environment" in r for r in refs)
-    assert any("executor" in r for r in refs)
-    assert any("analyst" in r for r in refs)
+    assert any("runner" in r for r in refs)
+    assert any("analyzer" in r for r in refs)
 
     # verify log contents
-    env_log = next((task.logs_dir.glob("*_environment.log"))).read_text()
-    assert "environment: docker" in env_log
-    exec_log = next((task.logs_dir.glob("*_executor.log"))).read_text()
-    assert "execution result: 3" in exec_log
-    analyst_log = next((task.logs_dir.glob("*_analyst.log"))).read_text()
-    assert "Result: 3" in analyst_log
+    planner_log = next(task.logs_dir.glob("*_planner.log")).read_text()
+    assert "plan" in planner_log
+    runner_log = next(task.logs_dir.glob("*_runner.log")).read_text()
+    assert "result: 3" in runner_log
+    analyzer_log = next(task.logs_dir.glob("*_analyzer.log")).read_text()
+    assert "add numbers: 3" in analyzer_log
