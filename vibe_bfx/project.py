@@ -61,5 +61,5 @@ class Project:
     def list_tasks(self) -> Iterable[str]:
         """Yield the names of tasks in this project."""
         for p in sorted(self.path.iterdir()):
-            if p.is_dir() and p != self.output_dir and not p.name.startswith('.'):
+            if p.is_dir() and p != self.output_dir and not p.name.startswith("."):
                 yield p.name

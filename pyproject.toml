@@ -14,3 +14,6 @@ dependencies = [
 
 [project.scripts]
 vibe-bfx = "vibe_bfx.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["vibe_bfx*"]
