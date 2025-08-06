@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import logging
 
 from vibe_bfx import Project
 from langchain.schema import AIMessage
@@ -84,3 +85,21 @@ def test_run_chat(tmp_path: Path):
     assert node_logs, "no node log files created"
     log_refs = task.log_file.read_text().splitlines()
     assert any("logs/" in line for line in log_refs)
+
+
+def test_iter_samples_logs_skipped(tmp_path: Path, caplog):
+    proj_root = tmp_path / "proj"
+    proj_root.mkdir()
+    (proj_root / "metadata.csv").write_text(
+        "sample_id,r1_fp\nS1,reads1.fq\nS2,\n,reads3.fq\nS3,reads4.fq\n"
+    )
+
+    project = Project(proj_root)
+    with caplog.at_level(logging.WARNING):
+        samples = list(project.iter_samples())
+
+    assert samples == [
+        {"sample_id": "S1", "r1_fp": "reads1.fq"},
+        {"sample_id": "S3", "r1_fp": "reads4.fq"},
+    ]
+    assert "Skipped metadata rows missing required fields: [2, 3]" in caplog.text

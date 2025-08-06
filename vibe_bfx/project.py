@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any, Iterable, Optional
 
 import csv
+import logging
 from typing import List
 
 import yaml
@@ -74,9 +75,19 @@ class Project:
 
         sample_key = self.config["sample_id_field_name"]
         r1_key = self.config["r1_fp_field_name"]
-        for row in self.metadata:
-            if sample_key in row and r1_key in row:
-                yield {"sample_id": row[sample_key], "r1_fp": row[r1_key]}
+        skipped: list[int] = []
+        for idx, row in enumerate(self.metadata, 1):
+            sample = row.get(sample_key)
+            r1 = row.get(r1_key)
+            if sample and r1:
+                yield {"sample_id": sample, "r1_fp": r1}
+            else:
+                skipped.append(idx)
+        if skipped:
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                "Skipped metadata rows missing required fields: %s", skipped
+            )
 
     def create_task(self, name: str) -> Task:
         """Create and return a task within this project."""
