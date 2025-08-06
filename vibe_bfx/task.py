@@ -8,6 +8,7 @@ from datetime import datetime
 
 from langchain.schema import BaseMessage, HumanMessage
 from langgraph.graph import END, START, StateGraph
+from langchain_community.chat_models import ChatOpenAI
 
 
 class ChatState(TypedDict):
