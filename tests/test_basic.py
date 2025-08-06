@@ -34,6 +34,44 @@ def test_project_and_task(tmp_path: Path):
     assert "started" in task.log_file.read_text()
 
 
+def test_reserved_config_defaults(tmp_path: Path):
+    proj_root = tmp_path / "proj"
+    proj_root.mkdir()
+    # metadata uses default column names
+    (proj_root / "metadata.csv").write_text(
+        "sample_id,r1_fp\nS1,reads.fastq\n"
+    )
+
+    project = Project(proj_root)
+
+    # All reserved keys should be present with default values
+    assert project.config["db_fp"] is None
+    assert project.config["conda_fp"] is None
+    assert project.config["docker_fp"] is None
+    assert project.config["singularity_fp"] is None
+    assert project.config["sample_id_field_name"] == "sample_id"
+    assert project.config["r1_fp_field_name"] == "r1_fp"
+
+    # iter_samples should expose standardized keys
+    samples = list(project.iter_samples())
+    assert samples == [{"sample_id": "S1", "r1_fp": "reads.fastq"}]
+
+
+def test_custom_metadata_fields(tmp_path: Path):
+    proj_root = tmp_path / "proj"
+    proj_root.mkdir()
+    # metadata uses custom column names
+    (proj_root / "metadata.csv").write_text("sid,read1\nA,foo.fq\n")
+    # override the column names via config
+    (proj_root / "config.yaml").write_text(
+        "sample_id_field_name: sid\nr1_fp_field_name: read1\n"
+    )
+
+    project = Project(proj_root)
+    samples = list(project.iter_samples())
+    assert samples == [{"sample_id": "A", "r1_fp": "foo.fq"}]
+
+
 def test_run_chat(tmp_path: Path):
     project = Project(tmp_path / "proj")
     task = project.create_task("t1")
