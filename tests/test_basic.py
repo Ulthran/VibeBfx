@@ -39,9 +39,7 @@ def test_reserved_config_defaults(tmp_path: Path):
     proj_root = tmp_path / "proj"
     proj_root.mkdir()
     # metadata uses default column names
-    (proj_root / "metadata.csv").write_text(
-        "sample_id,r1_fp\nS1,reads.fastq\n"
-    )
+    (proj_root / "metadata.csv").write_text("sample_id,r1_fp\nS1,reads.fastq\n")
 
     project = Project(proj_root)
 

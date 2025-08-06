@@ -85,9 +85,7 @@ class Project:
                 skipped.append(idx)
         if skipped:
             logger = logging.getLogger(__name__)
-            logger.warning(
-                "Skipped metadata rows missing required fields: %s", skipped
-            )
+            logger.warning("Skipped metadata rows missing required fields: %s", skipped)
 
     def create_task(self, name: str) -> Task:
         """Create and return a task within this project."""

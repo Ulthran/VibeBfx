@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Callable, Dict
 
 
-class Executor:
+class Runner:
     """Run a tool with specified inputs and parameters."""
 
     def run(
@@ -15,21 +15,6 @@ class Executor:
     ) -> Any:
         params = params or {}
         return tool(**inputs, **params)
-
-
-class EnvironmentManager:
-    """Find or create an environment for running a tool."""
-
-    def prepare(self, tool_name: str) -> str:
-        """Return the chosen environment for ``tool_name``.
-
-        The current implementation simply prefers Docker and falls back to
-        Conda. Future versions could perform actual environment resolution.
-        """
-
-        for env in ("docker", "conda"):
-            return env
-        return "local"
 
 
 class Analyst:
