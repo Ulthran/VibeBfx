@@ -12,10 +12,20 @@ class EchoModel:
 
 
 def test_project_and_task(tmp_path: Path):
-    project = Project(tmp_path / "proj")
+    proj_root = tmp_path / "proj"
+    proj_root.mkdir()
+    (proj_root / "metadata.csv").write_text("sample,file\nA,foo.txt\n")
+    (proj_root / "config.yaml").write_text("db: /data/db\n")
+
+    project = Project(proj_root)
+    assert project.metadata == [{"sample": "A", "file": "foo.txt"}]
+    assert project.config["db"] == "/data/db"
+    assert project.output_dir.exists()
+
     task = project.create_task("t1")
-    assert (task.chat_file).exists()
-    assert (task.log_file).exists()
+    assert task.path == project.path / "t1"
+    assert task.chat_file.exists()
+    assert task.log_file.exists()
 
     task.append_chat("user", "hi")
     task.append_log("started")

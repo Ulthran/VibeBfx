@@ -54,6 +54,8 @@ class Task:
         """
 
         if model is None:
+            from langchain_community.chat_models import ChatOpenAI
+
             model = ChatOpenAI(
                 model="gpt-4o",
                 temperature=0.1,
