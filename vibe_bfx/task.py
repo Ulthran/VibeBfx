@@ -9,7 +9,7 @@ from contextlib import contextmanager
 
 from langchain.schema import BaseMessage, HumanMessage
 from langgraph.graph import END, START, StateGraph
-from langchain_community.chat_models import ChatOpenAI
+from langchain_openai import ChatOpenAI
 
 
 class ChatState(TypedDict):

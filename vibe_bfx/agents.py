@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict
 
-from .task import Task
-
 
 class Executor:
     """Run a tool with specified inputs and parameters."""
@@ -44,7 +42,7 @@ class Analyst:
 class Planner:
     """Assign units of work on a :class:`~vibe_bfx.task.Task` to worker agents."""
 
-    def __init__(self, task: Task):
+    def __init__(self, task: "Task"):
         self.task = task
         self.executor = Executor()
         self.env_manager = EnvironmentManager()
