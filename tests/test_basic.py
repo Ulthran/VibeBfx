@@ -30,3 +30,9 @@ def test_run_chat(tmp_path: Path):
     response = task.run_chat("echo", model=EchoModel())
     assert response == "echo"
     assert "assistant: echo" in task.chat_file.read_text()
+
+    # ensure node logs are created and referenced
+    node_logs = list((task.path / "logs").glob("*.log"))
+    assert node_logs, "no node log files created"
+    log_refs = task.log_file.read_text().splitlines()
+    assert any("logs/" in line for line in log_refs)

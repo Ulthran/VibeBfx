@@ -3,10 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, List, Optional, TypedDict
 
-import io
-import sys
+import logging
+from datetime import datetime
 import warnings
-from contextlib import redirect_stderr, redirect_stdout
 
 from langchain.schema import BaseMessage, HumanMessage
 
@@ -19,6 +18,8 @@ class Task:
         self.path.mkdir(parents=True, exist_ok=True)
         self.chat_file = self.path / "chat.txt"
         self.log_file = self.path / "log.txt"
+        self.logs_dir = self.path / "logs"
+        self.logs_dir.mkdir(parents=True, exist_ok=True)
         for f in (self.chat_file, self.log_file):
             f.touch(exist_ok=True)
 
@@ -29,6 +30,11 @@ class Task:
     def append_log(self, entry: str) -> None:
         with self.log_file.open("a", encoding="utf-8") as fh:
             fh.write(entry + "\n")
+
+    def append_log_reference(self, node: str, log_path: Path, timestamp: str) -> None:
+        rel = log_path.relative_to(self.path)
+        with self.log_file.open("a", encoding="utf-8") as fh:
+            fh.write(f"{timestamp} {node}: {rel.as_posix()}\n")
 
     def run_chat(self, prompt: str, model: Optional[Any] = None) -> str:
         """Run a single chat turn using LangChain and LangGraph.
@@ -42,55 +48,59 @@ class Task:
             :class:`langchain_openai.ChatOpenAI` model is used.
         """
 
-        class _Tee:
-            def __init__(self, *streams):
-                self.streams = streams
+        logging.captureWarnings(True)
+        warnings.simplefilter("default")
 
-            def write(self, data: str) -> int:
-                for s in self.streams:
-                    s.write(data)
-                return len(data)
+        if model is None:
+            from langchain_openai import ChatOpenAI
+            model = ChatOpenAI()
 
-            def flush(self) -> None:  # pragma: no cover - passthrough
-                for s in self.streams:
-                    s.flush()
+        from langgraph.graph import StateGraph, END
 
-        buffer = io.StringIO()
-        tee_out = _Tee(sys.stdout, buffer)
-        tee_err = _Tee(sys.stderr, buffer)
+        class ChatState(TypedDict):
+            messages: List[BaseMessage]
 
-        with warnings.catch_warnings(), redirect_stdout(tee_out), redirect_stderr(tee_err):
-            warnings.simplefilter("default")
+        def call_model(state: ChatState) -> ChatState:
+            node = "model"
+            ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+            log_path = self.logs_dir / f"{ts}_{node}.log"
 
-            if model is None:
-                from langchain_openai import ChatOpenAI
-                model = ChatOpenAI()
+            handler = logging.FileHandler(log_path)
+            formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+            handler.setFormatter(formatter)
 
-            from langgraph.graph import StateGraph, END
+            logger = logging.getLogger(node)
+            logger.setLevel(logging.INFO)
+            logger.propagate = False
+            logger.addHandler(handler)
 
-            class ChatState(TypedDict):
-                messages: List[BaseMessage]
+            warn_logger = logging.getLogger("py.warnings")
+            warn_logger.propagate = False
+            warn_logger.addHandler(handler)
 
-            def call_model(state: ChatState) -> ChatState:
+            try:
+                logger.info("Prompt: %s", state["messages"][-1].content)
                 response = model.invoke(state["messages"])
-                return {"messages": state["messages"] + [response]}
+                logger.info("Response: %s", response.content)
+            finally:
+                warn_logger.removeHandler(handler)
+                logger.removeHandler(handler)
+                handler.close()
+                self.append_log_reference(node, log_path, ts)
 
-            graph = StateGraph(ChatState)
-            graph.add_node("model", call_model)
-            graph.add_edge("model", END)
-            graph.set_entry_point("model")
-            app = graph.compile()
+            return {"messages": state["messages"] + [response]}
 
-            result = app.invoke({"messages": [HumanMessage(content=prompt)]})
+        graph = StateGraph(ChatState)
+        graph.add_node("model", call_model)
+        graph.add_edge("model", END)
+        graph.set_entry_point("model")
+        app = graph.compile()
+
+        result = app.invoke({"messages": [HumanMessage(content=prompt)]})
 
         response = result["messages"][-1].content
 
-        captured = buffer.getvalue().strip()
-        if captured:
-            self.append_log(captured)
-
         self.append_chat("user", prompt)
         self.append_chat("assistant", response)
-        self.append_log(f"Prompt: {prompt}\nResponse: {response}\n")
 
         return response
