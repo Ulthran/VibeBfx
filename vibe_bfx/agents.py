@@ -57,10 +57,30 @@ class Planner:
         inputs: Dict[str, Any],
         params: Dict[str, Any] | None = None,
     ) -> str:
-        env = self.env_manager.prepare(getattr(tool, "__name__", "tool"))
-        self.task.append_log(f"environment: {env}")
-        result = self.executor.run(tool, inputs=inputs, params=params)
-        self.task.append_log(f"execution result: {result}")
-        report = self.analyst.analyze(result)
-        self.task.append_log(report)
+        tool_name = getattr(tool, "__name__", "tool")
+        with self.task.log_context("planner") as logger:
+            logger.info("plan: run %s with inputs %s", tool_name, inputs)
+            env = self.task.run_agent(
+                "environment",
+                self.env_manager.prepare,
+                tool_name,
+                result_label="environment",
+            )
+            logger.info("environment: %s", env)
+            result = self.task.run_agent(
+                "executor",
+                self.executor.run,
+                tool,
+                inputs=inputs,
+                params=params,
+                result_label="execution result",
+            )
+            logger.info("execution result: %s", result)
+            report = self.task.run_agent(
+                "analyst",
+                self.analyst.analyze,
+                result,
+                result_label="analysis",
+            )
+            logger.info("analysis: %s", report)
         return report
