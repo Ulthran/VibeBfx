@@ -4,6 +4,8 @@ from pathlib import Path
 from typing import List, TypedDict
 
 from langchain.schema import BaseMessage, HumanMessage
+from langgraph import END, StateGraph
+from langchain_openai import ChatOpenAI
 
 
 class Task:
@@ -38,10 +40,13 @@ class Task:
         """
 
         if model is None:
-            from langchain.chat_models import ChatOpenAI
-            model = ChatOpenAI()
-
-        from langgraph.graph import StateGraph, END
+            model = ChatOpenAI(
+                model="gpt-4o",
+                temperature=0.1,
+                max_tokens=None,
+                timeout=None,
+                max_retries=2,
+            )
 
         class ChatState(TypedDict):
             messages: List[BaseMessage]
