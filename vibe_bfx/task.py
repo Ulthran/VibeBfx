@@ -8,7 +8,11 @@ from datetime import datetime
 
 from langchain.schema import BaseMessage, HumanMessage
 from langgraph.graph import END, START, StateGraph
-from langchain_community import ChatOpenAI
+from langchain_community.chat_models import ChatOpenAI
+
+
+class ChatState(TypedDict):
+    messages: List[BaseMessage]
 
 
 class Task:
@@ -57,9 +61,6 @@ class Task:
                 timeout=None,
                 max_retries=2,
             )
-
-        class ChatState(TypedDict):
-            messages: List[BaseMessage]
 
         def call_model(state: ChatState) -> ChatState:
             node = "model"
