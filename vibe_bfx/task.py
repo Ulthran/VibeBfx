@@ -8,6 +8,8 @@ from datetime import datetime
 import warnings
 
 from langchain.schema import BaseMessage, HumanMessage
+from langgraph import END, StateGraph
+from langchain_openai import ChatOpenAI
 
 
 class Task:
@@ -52,10 +54,13 @@ class Task:
         warnings.simplefilter("default")
 
         if model is None:
-            from langchain_community.chat_models import ChatOpenAI
-            model = ChatOpenAI()
-
-        from langgraph.graph import StateGraph, END
+            model = ChatOpenAI(
+                model="gpt-4o",
+                temperature=0.1,
+                max_tokens=None,
+                timeout=None,
+                max_retries=2,
+            )
 
         class ChatState(TypedDict):
             messages: List[BaseMessage]
