@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict
 
+import cloudpickle
+
+from .celery_app import app, execute_tool
+
 
 class Runner:
     """Run a tool with specified inputs and parameters."""
@@ -15,6 +19,42 @@ class Runner:
     ) -> Any:
         params = params or {}
         return tool(**inputs, **params)
+
+
+class EnvironmentManager:
+    """Prepare the execution environment for a tool.
+
+    In a real deployment this might provision containers or other
+    resources.  For now it simply returns a placeholder string so that
+    higher level orchestration can proceed.
+    """
+
+    def prepare(self, tool_name: str) -> str:
+        return "docker"
+
+
+class Executor:
+    """Execute callables via Celery.
+
+    The :mod:`celery` app is configured for eager execution during tests
+    so calls block until completion, but in production the same code can
+    dispatch work to remote workers.
+    """
+
+    def __init__(self) -> None:
+        self.app = app
+
+    def run(
+        self,
+        tool: Callable[..., Any],
+        *,
+        inputs: Dict[str, Any],
+        params: Dict[str, Any] | None = None,
+    ) -> Any:
+        params = params or {}
+        payload = cloudpickle.dumps(tool)
+        result = execute_tool.delay(payload, inputs, params)
+        return result.get()
 
 
 class Analyst:
