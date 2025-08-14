@@ -1,6 +1,4 @@
-from __future__ import annotations
-
-from .celery_app import app
+from vibe_bfx.celery_app import app
 
 
 def main() -> None:

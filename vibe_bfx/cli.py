@@ -1,10 +1,5 @@
-from __future__ import annotations
-
 import argparse
-import shlex
-
-from .project import Project
-from .celery_app import execute_tool
+from vibe_bfx.celery_app import do_work
 
 
 def main() -> None:
@@ -14,12 +9,11 @@ def main() -> None:
     parser.add_argument("--prompt", required=True, help="Command to execute")
     args = parser.parse_args()
 
-    project = Project(args.project)
-    project.get_task(args.task) or project.create_task(args.task)
-
-    command = shlex.split(args.prompt)
-    result = execute_tool.delay(command).get()
-    print(result)
+    print(
+        f"Running command in project: {args.project}, task: {args.task}, prompt: {args.prompt}"
+    )
+    do_work.apply_async((args.prompt,))
+    return
 
 
 if __name__ == "__main__":  # pragma: no cover

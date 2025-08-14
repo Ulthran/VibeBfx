@@ -14,7 +14,13 @@ text interface reminiscent of Codex.
 ```bash
 pip install -e .
 
-# Start an interactive session for a project and task
+# Start redis backend
+docker run -d --name redis-stack -p 6379:6379 -p 8001:8001 redis/redis-stack:latest
+
+# Start VibeBfx worker
+vibe-bfx-worker
+
+# In another terminal, start a task
 vibe-bfx my_project first-task --prompt "hello"
 ```
 
