@@ -1,20 +1,62 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Dict
+from typing import Any, Dict, Sequence
+
+import subprocess
+
+from .celery_app import app, execute_tool
 
 
 class Runner:
-    """Run a tool with specified inputs and parameters."""
+    """Run a command with specified inputs and parameters."""
 
     def run(
         self,
-        tool: Callable[..., Any],
+        command: Sequence[str],
         *,
         inputs: Dict[str, Any],
         params: Dict[str, Any] | None = None,
-    ) -> Any:
+    ) -> str:
         params = params or {}
-        return tool(**inputs, **params)
+        cmd = list(command) + [str(v) for v in inputs.values()]
+        completed = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        return completed.stdout.strip()
+
+
+class EnvironmentManager:
+    """Prepare the execution environment for a tool.
+
+    In a real deployment this might provision containers or other
+    resources.  For now it simply returns a placeholder string so that
+    higher level orchestration can proceed.
+    """
+
+    def prepare(self, tool_name: str) -> str:
+        return "docker"
+
+
+class Executor:
+    """Execute commands via Celery.
+
+    The :mod:`celery` app is configured for eager execution during tests so
+    calls block until completion, but in production the same code can dispatch
+    work to remote workers.
+    """
+
+    def __init__(self) -> None:
+        self.app = app
+
+    def run(
+        self,
+        command: Sequence[str],
+        *,
+        inputs: Dict[str, Any],
+        params: Dict[str, Any] | None = None,
+    ) -> str:
+        params = params or {}
+        cmd = list(command) + [str(v) for v in inputs.values()]
+        result = execute_tool.delay(cmd)
+        return result.get()
 
 
 class Analyst:
@@ -35,12 +77,12 @@ class Planner:
 
     def run(
         self,
-        tool: Callable[..., Any],
+        command: Sequence[str],
         *,
         inputs: Dict[str, Any],
         params: Dict[str, Any] | None = None,
     ) -> str:
-        tool_name = getattr(tool, "__name__", "tool")
+        tool_name = command[0] if command else "command"
         with self.task.log_context("planner") as logger:
             logger.info("plan: run %s with inputs %s", tool_name, inputs)
             env = self.task.run_agent(
@@ -53,7 +95,7 @@ class Planner:
             result = self.task.run_agent(
                 "executor",
                 self.executor.run,
-                tool,
+                command,
                 inputs=inputs,
                 params=params,
                 result_label="execution result",

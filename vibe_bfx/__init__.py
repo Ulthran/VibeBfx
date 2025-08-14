@@ -2,7 +2,7 @@
 
 from .project import Project
 from .task import Task
-from .agents import Planner, Runner, Analyst
+from .agents import Analyst, EnvironmentManager, Executor, Planner, Runner
 
 __all__ = [
     "Project",
@@ -10,4 +10,6 @@ __all__ = [
     "Planner",
     "Runner",
     "Analyst",
+    "Executor",
+    "EnvironmentManager",
 ]
