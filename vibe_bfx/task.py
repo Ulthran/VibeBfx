@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, TypedDict
+from typing import Any, Callable, Dict, List, Optional, Sequence, TypedDict
 
 import logging
 from datetime import datetime
@@ -83,17 +83,17 @@ class Task:
     def run(
         self,
         prompt: str,
-        tool: Callable[..., Any],
+        command: Sequence[str],
         *,
         inputs: Dict[str, Any],
         params: Dict[str, Any] | None = None,
     ) -> str:
-        """Run a planner-driven task using ``tool`` and record chat/logs."""
+        """Run a planner-driven task using ``command`` and record chat/logs."""
         from .agents import Planner  # local import to avoid circular dependency
 
         self.append_chat("user", prompt)
         planner = Planner(self)
-        report = planner.run(tool=tool, inputs=inputs, params=params)
+        report = planner.run(command=command, inputs=inputs, params=params)
         self.append_chat("assistant", report)
         return report
 

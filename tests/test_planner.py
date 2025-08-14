@@ -5,16 +5,17 @@ from pathlib import Path
 from vibe_bfx import Project
 
 
-def add(a: int, b: int) -> int:
-    return a + b
-
-
 def test_planner_uses_workers(tmp_path: Path) -> None:
     project = Project(tmp_path / "proj")
     task = project.create_task("t1")
+    cmd = [
+        "python",
+        "-c",
+        "import sys; print(int(sys.argv[1]) + int(sys.argv[2]))",
+    ]
     report = task.run(
         "add numbers",
-        tool=add,
+        command=cmd,
         inputs={"a": 1, "b": 2},
     )
 

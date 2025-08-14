@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from celery import Celery
-import cloudpickle
+import subprocess
+from typing import Sequence
 
 # The Celery application used throughout the project.  It defaults to an in
 # memory broker/back end and eager execution so that unit tests do not require
@@ -18,8 +19,13 @@ app.conf.update(
 
 
 @app.task(name="vibe_bfx.execute_tool")
-def execute_tool(pickled_tool: bytes, inputs: dict, params: dict | None = None):
-    """Execute a pickled callable with the provided inputs."""
-    func = cloudpickle.loads(pickled_tool)
-    params = params or {}
-    return func(**inputs, **params)
+def execute_tool(command: Sequence[str]) -> str:
+    """Run ``command`` via :mod:`subprocess` and return its stdout."""
+
+    completed = subprocess.run(
+        list(command),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return completed.stdout.strip()
