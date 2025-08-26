@@ -1,5 +1,5 @@
 import logging
-from langchain.schema import BaseMessage, HumanMessage
+from langchain.schema import AIMessage, BaseMessage, HumanMessage
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 from typing import Any, Dict, Sequence
@@ -60,7 +60,10 @@ class Planner:
         print(f"Planner response: {response}")
         print(type(response))
         print(type(response.steps))
-        return BaseMessage(content=response.steps)
+        # Join the individual steps into a single string and return a
+        # well-typed message so downstream components can process it
+        steps_text = "\n".join(response.steps)
+        return AIMessage(content=steps_text)
 
 
 class Runner:
