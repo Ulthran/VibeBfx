@@ -24,7 +24,7 @@ runner = Runner()
 
 def call_runner(state: ChatState) -> ChatState:
     response = runner.run(state["messages"][-1])
-    msg = HumanMessage(content=f"script: {response.script}\nenv: {response.env}")
+    msg = HumanMessage(content=json.dumps({"script": response.script, "env": response.env}))
     return {"messages": state["messages"] + [msg]}
 
 
