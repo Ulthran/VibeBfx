@@ -1,4 +1,5 @@
 import argparse
+import logging
 from vibe_bfx.prefect import do_work
 
 
@@ -9,10 +10,12 @@ def main() -> None:
     parser.add_argument("--prompt", required=True, help="Command to execute")
     args = parser.parse_args()
 
-    print(
+    logging.basicConfig(level=logging.DEBUG)
+
+    logging.info(
         f"Running command in project: {args.project}, task: {args.task}, prompt: {args.prompt}"
     )
-    do_work(args.prompt)
+    do_work(args.prompt, args.project, args.task)
     return
 
 

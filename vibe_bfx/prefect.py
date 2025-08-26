@@ -1,3 +1,4 @@
+import logging
 from langchain.schema import BaseMessage, HumanMessage
 from langgraph.graph import END, START, StateGraph
 from pathlib import Path
@@ -34,15 +35,19 @@ def call_reporter(state: ChatState) -> ChatState:
     return {"messages": state["messages"] + [response]}
 
 
-@flow(log_prints=True, name="Unit of Work")
-def do_work(prompt: str):
-    print("STARTING WORK")
+@flow(log_prints=True, flow_run_name="{project}_{task}")
+def do_work(prompt: str, project: str, task: str):
+    logging.info("STARTING WORK")
 
-    print("Compiling state graph...")
+    logging.info("Compiling state graph...")
     graph = StateGraph(ChatState)
     graph.add_node("planner", call_planner)
     graph.add_edge(START, "planner")
     graph.add_node("runner", call_runner)
+    graph.add_edge("planner", "runner")
+    graph.add_node("reporter", call_reporter)
+    graph.add_edge("runner", "reporter")
+    graph.add_edge("reporter", END)
     app = graph.compile()
 
     print("Graph compiled, invoking planner...")

@@ -1,3 +1,4 @@
+import logging
 from langchain.schema import BaseMessage, HumanMessage
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
@@ -16,6 +17,10 @@ class RunResponse(BaseModel):
     env: str = Field(
         description="The environment to run the script in (could be venv, conda, docker, etc)"
     )
+
+
+class ReportResponse(BaseModel):
+    summary: str = Field(description="A concise summary of the results")
 
 
 class Planner:
@@ -49,14 +54,11 @@ class Planner:
 
     def make_plan(self, prompt: BaseMessage) -> BaseMessage:
         """Generate a sequence of steps to execute based on the prompt."""
-        response = self.model.invoke(
+        response: PlanResponse = self.model.invoke(
             [{"role": "user", "content": self.prompt(prompt.content)}]
         )
-        if isinstance(response, dict) and "steps" in response:
-            return response["steps"]
-        raise ValueError(
-            "Invalid response format from model, expected a dictionary with 'steps' key."
-        )
+        logging.debug(f"Planner response: {response}")
+        return BaseMessage(content=str(response.steps))
 
 
 class Runner:
@@ -89,6 +91,40 @@ class Runner:
         )
 
     def run(self, prompt: BaseMessage) -> RunResponse:
+        response = self.model.invoke(
+            [{"role": "user", "content": self.prompt(prompt.content)}]
+        )
+        return response
+
+
+class Reporter:
+    def __init__(self):
+        self.model = ChatOpenAI(
+            model="gpt-4o",
+            temperature=0.1,
+            timeout=None,
+            max_retries=2,
+        ).with_structured_output(ReportResponse)
+
+        self.prompt = (
+            lambda user_prompt: f"""
+            ``` SYSTEM
+            You are an expert bioinformatician who has just completed a series of analyses. You have access to the results of these analyses and can summarize them for planning next steps.
+
+            Return: A concise summary of the results, highlighting key findings and their implications.
+            ```
+
+            ``` GOOD EXAMPLE RESPONSES
+            "The analysis revealed several key insights into the dataset. Notably, we identified a significant increase in gene expression levels in response to the treatment, suggesting a potential mechanism of action. Additionally, the data indicated a correlation between specific genetic markers and observed phenotypic changes, which could inform future research directions."
+            ```
+
+            ``` USER
+            {user_prompt}
+            ```
+        """
+        )
+
+    def report(self, prompt: BaseMessage) -> BaseMessage:
         response = self.model.invoke(
             [{"role": "user", "content": self.prompt(prompt.content)}]
         )
