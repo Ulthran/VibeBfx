@@ -1,6 +1,6 @@
 import json
 import logging
-from langchain.schema import BaseMessage, HumanMessage
+from langchain.schema import AIMessage, BaseMessage, HumanMessage
 from langgraph.graph import END, START, StateGraph
 from pathlib import Path
 from prefect import flow, task
@@ -10,6 +10,8 @@ from vibe_bfx.agents import Planner, Reporter, Runner
 
 class ChatState(TypedDict):
     messages: List[BaseMessage]
+    steps: List[str]
+    current_step: int
 
 
 planner = Planner()
@@ -17,7 +19,14 @@ planner = Planner()
 
 def call_planner(state: ChatState) -> ChatState:
     response = planner.make_plan(state["messages"][-1])
-    return {"messages": state["messages"] + [response]}
+    steps = response.steps
+    plan_message = AIMessage(content="\n".join(steps))
+    next_msg = HumanMessage(content=steps[0]) if steps else HumanMessage(content="")
+    return {
+        "messages": state["messages"] + [plan_message, next_msg],
+        "steps": steps,
+        "current_step": 0,
+    }
 
 
 runner = Runner()
@@ -26,7 +35,10 @@ runner = Runner()
 def call_runner(state: ChatState) -> ChatState:
     response = runner.run(state["messages"][-1])
     msg = HumanMessage(content=json.dumps({"script": response.script, "env": response.env}))
-    return {"messages": state["messages"] + [msg]}
+    return {
+        **state,
+        "messages": state["messages"] + [msg],
+    }
 
 
 reporter = Reporter()
@@ -35,7 +47,15 @@ reporter = Reporter()
 def call_reporter(state: ChatState) -> ChatState:
     response = reporter.report(state["messages"][-1])
     msg = HumanMessage(content=response.summary)
-    return {"messages": state["messages"] + [msg]}
+    next_index = state["current_step"] + 1
+    new_messages = state["messages"] + [msg]
+    if next_index < len(state["steps"]):
+        new_messages.append(HumanMessage(content=state["steps"][next_index]))
+    return {
+        "messages": new_messages,
+        "steps": state["steps"],
+        "current_step": next_index,
+    }
 
 
 @flow(log_prints=True, flow_run_name="{project}_{task}")
@@ -50,11 +70,15 @@ def do_work(prompt: str, project: str, task: str):
     graph.add_edge("planner", "runner")
     graph.add_node("reporter", call_reporter)
     graph.add_edge("runner", "reporter")
-    graph.add_edge("reporter", END)
+
+    def continue_or_end(state: ChatState):
+        return "runner" if state["current_step"] < len(state["steps"]) else END
+
+    graph.add_conditional_edges("reporter", continue_or_end)
     app = graph.compile()
 
     print("Graph compiled, invoking planner...")
-    result = app.invoke({"messages": [HumanMessage(content=prompt)]})
+    result = app.invoke({"messages": [HumanMessage(content=prompt)], "steps": [], "current_step": 0})
 
     print("Planner invoked, processing result...")
     messages = result["messages"]

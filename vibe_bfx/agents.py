@@ -1,5 +1,5 @@
 import logging
-from langchain.schema import AIMessage, BaseMessage, HumanMessage
+from langchain.schema import BaseMessage, HumanMessage
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 from typing import Any, Dict, Sequence
@@ -52,18 +52,12 @@ class Planner:
         """
         )
 
-    def make_plan(self, prompt: BaseMessage) -> BaseMessage:
+    def make_plan(self, prompt: BaseMessage) -> PlanResponse:
         """Generate a sequence of steps to execute based on the prompt."""
         response: PlanResponse = self.model.invoke(
             [{"role": "user", "content": self.prompt(prompt.content)}]
         )
-        print(f"Planner response: {response}")
-        print(type(response))
-        print(type(response.steps))
-        # Join the individual steps into a single string and return a
-        # well-typed message so downstream components can process it
-        steps_text = "\n".join(response.steps)
-        return AIMessage(content=steps_text)
+        return response
 
 
 class Runner:
