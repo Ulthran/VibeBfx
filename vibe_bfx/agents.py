@@ -7,7 +7,7 @@ from vibe_bfx.task import Task
 
 
 class PlanResponse(BaseModel):
-    steps: Sequence[str] = Field(
+    steps: list[str] = Field(
         default_factory=list, description="List of steps to execute"
     )
 
@@ -57,8 +57,10 @@ class Planner:
         response: PlanResponse = self.model.invoke(
             [{"role": "user", "content": self.prompt(prompt.content)}]
         )
-        logging.debug(f"Planner response: {response}")
-        return BaseMessage(content=str(response.steps))
+        print(f"Planner response: {response}")
+        print(type(response))
+        print(type(response.steps))
+        return BaseMessage(content=response.steps)
 
 
 class Runner:

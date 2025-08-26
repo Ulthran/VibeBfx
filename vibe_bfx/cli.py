@@ -1,5 +1,6 @@
 import argparse
 import logging
+from pathlib import Path
 from vibe_bfx.prefect import do_work
 
 
@@ -15,7 +16,7 @@ def main() -> None:
     logging.info(
         f"Running command in project: {args.project}, task: {args.task}, prompt: {args.prompt}"
     )
-    do_work(args.prompt, args.project, args.task)
+    do_work(args.prompt, Path(args.project).name, args.task)
     return
 
 
