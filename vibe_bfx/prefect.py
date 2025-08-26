@@ -24,7 +24,8 @@ runner = Runner()
 
 def call_runner(state: ChatState) -> ChatState:
     response = runner.run(state["messages"][-1])
-    return {"messages": state["messages"] + [response]}
+    msg = HumanMessage(content=f"script: {response.script}\nenv: {response.env}")
+    return {"messages": state["messages"] + [msg]}
 
 
 reporter = Reporter()
@@ -32,7 +33,8 @@ reporter = Reporter()
 
 def call_reporter(state: ChatState) -> ChatState:
     response = reporter.report(state["messages"][-1])
-    return {"messages": state["messages"] + [response]}
+    msg = HumanMessage(content=response.summary)
+    return {"messages": state["messages"] + [msg]}
 
 
 @flow(log_prints=True, flow_run_name="{project}_{task}")
@@ -54,10 +56,12 @@ def do_work(prompt: str, project: str, task: str):
     result = app.invoke({"messages": [HumanMessage(content=prompt)]})
 
     print("Planner invoked, processing result...")
-    response = result["messages"]
-    fp = Path("/home/ctbus/Penn/VibeBfx/out.txt")
+    messages = result["messages"]
+    task_dir = Path(project) / task
+    task_dir.mkdir(parents=True, exist_ok=True)
+    fp = task_dir / "out.txt"
     with fp.open("w", encoding="utf-8") as fh:
-        for r in response:
+        for r in messages:
             fh.write(r.content + "\n")
 
-    return response
+    return messages
