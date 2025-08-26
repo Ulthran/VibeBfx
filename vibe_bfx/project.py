@@ -1,15 +1,9 @@
-from __future__ import annotations
-
-from pathlib import Path
-from typing import Any, Iterable, Optional
-
 import csv
 import logging
-from typing import List
-
 import yaml
-
-from .task import Task
+from pathlib import Path
+from typing import Any, Iterable, Optional, List
+from vibe_bfx.task import Task
 
 
 class Project:

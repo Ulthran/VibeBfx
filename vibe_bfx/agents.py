@@ -1,111 +1,95 @@
-from __future__ import annotations
-
+from langchain.schema import BaseMessage, HumanMessage
+from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, Field
 from typing import Any, Dict, Sequence
-
-import subprocess
-
-from .celery_app import app, execute_tool
+from vibe_bfx.task import Task
 
 
-class Runner:
-    """Run a command with specified inputs and parameters."""
-
-    def run(
-        self,
-        command: Sequence[str],
-        *,
-        inputs: Dict[str, Any],
-        params: Dict[str, Any] | None = None,
-    ) -> str:
-        params = params or {}
-        cmd = list(command) + [str(v) for v in inputs.values()]
-        completed = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        return completed.stdout.strip()
+class PlanResponse(BaseModel):
+    steps: Sequence[str] = Field(
+        default_factory=list, description="List of steps to execute"
+    )
 
 
-class EnvironmentManager:
-    """Prepare the execution environment for a tool.
-
-    In a real deployment this might provision containers or other
-    resources.  For now it simply returns a placeholder string so that
-    higher level orchestration can proceed.
-    """
-
-    def prepare(self, tool_name: str) -> str:
-        return "docker"
-
-
-class Executor:
-    """Execute commands via Celery.
-
-    The :mod:`celery` app is configured for eager execution during tests so
-    calls block until completion, but in production the same code can dispatch
-    work to remote workers.
-    """
-
-    def __init__(self) -> None:
-        self.app = app
-
-    def run(
-        self,
-        command: Sequence[str],
-        *,
-        inputs: Dict[str, Any],
-        params: Dict[str, Any] | None = None,
-    ) -> str:
-        params = params or {}
-        cmd = list(command) + [str(v) for v in inputs.values()]
-        result = execute_tool.delay(cmd)
-        return result.get()
-
-
-class Analyst:
-    """Analyze results and produce a textual report."""
-
-    def analyze(self, result: Any) -> str:
-        return f"Result: {result}"
+class RunResponse(BaseModel):
+    script: str = Field(description="A bash script to run")
+    env: str = Field(
+        description="The environment to run the script in (could be venv, conda, docker, etc)"
+    )
 
 
 class Planner:
-    """Assign units of work on a :class:`~vibe_bfx.task.Task` to worker agents."""
+    def __init__(self):
+        self.model = ChatOpenAI(
+            model="gpt-4o",
+            temperature=0.1,
+            timeout=None,
+            max_retries=2,
+        ).with_structured_output(PlanResponse)
 
-    def __init__(self, task: "Task"):
-        self.task = task
-        self.executor = Executor()
-        self.env_manager = EnvironmentManager()
-        self.analyst = Analyst()
+        self.prompt = (
+            lambda user_prompt: f"""
+            ``` SYSTEM
+            You are an expert bioinformatician planning the necessary steps to perform a given task. Try to make each step the equivalent of a single command line tool invocation where possible.
 
-    def run(
-        self,
-        command: Sequence[str],
-        *,
-        inputs: Dict[str, Any],
-        params: Dict[str, Any] | None = None,
-    ) -> str:
-        tool_name = command[0] if command else "command"
-        with self.task.log_context("planner") as logger:
-            logger.info("plan: run %s with inputs %s", tool_name, inputs)
-            env = self.task.run_agent(
-                "environment",
-                self.env_manager.prepare,
-                tool_name,
-                result_label="environment",
-            )
-            logger.info("environment: %s", env)
-            result = self.task.run_agent(
-                "executor",
-                self.executor.run,
-                command,
-                inputs=inputs,
-                params=params,
-                result_label="execution result",
-            )
-            logger.info("execution result: %s", result)
-            report = self.task.run_agent(
-                "analyst",
-                self.analyst.analyze,
-                result,
-                result_label="analysis",
-            )
-            logger.info("analysis: %s", report)
-        return report
+            Also be sure to specify how each step should be mapped to the samples for this project. For example if you need to run `cutadapt` against each sample and then `bwa` against each sample/reference pair.
+
+            Return: A List of Strings, each representing a step to execute.
+            ```
+
+            ``` GOOD EXAMPLE RESPONSES
+            ["Remove low quality reads and trim with `trimmomatic`. Apply separately to each sample.", "Remove low complexity reads using `github.com/kylebittinger/heyfastq`. Apply separately to each sample.", "Generate a report on the cleaned fastqs using `fastqc`. Apply to all samples to produce an aggregate report."]
+            ```
+
+            ``` USER
+            {user_prompt}
+            ```
+        """
+        )
+
+    def make_plan(self, prompt: BaseMessage) -> BaseMessage:
+        """Generate a sequence of steps to execute based on the prompt."""
+        response = self.model.invoke(
+            [{"role": "user", "content": self.prompt(prompt.content)}]
+        )
+        if isinstance(response, dict) and "steps" in response:
+            return response["steps"]
+        raise ValueError(
+            "Invalid response format from model, expected a dictionary with 'steps' key."
+        )
+
+
+class Runner:
+    def __init__(self):
+        self.model = ChatOpenAI(
+            model="gpt-4o",
+            temperature=0.1,
+            timeout=None,
+            max_retries=2,
+        ).with_structured_output(RunResponse)
+
+        self.prompt = (
+            lambda user_prompt: f"""
+            ``` SYSTEM
+            You are an expert bioinformatician planning the necessary steps to perform a given task. Try to make each step the equivalent of a single command line tool invocation where possible.
+
+            Also be sure to specify how each step should be mapped to the samples for this project. For example if you need to run `cutadapt` against each sample and then `bwa` against each sample/reference pair.
+
+            Return: A List of Strings, each representing a step to execute.
+            ```
+
+            ``` GOOD EXAMPLE RESPONSES
+            ["Remove low quality reads and trim with `trimmomatic`. Apply separately to each sample.", "Remove low complexity reads using `github.com/kylebittinger/heyfastq`. Apply separately to each sample.", "Generate a report on the cleaned fastqs using `fastqc`. Apply to all samples to produce an aggregate report."]
+            ```
+
+            ``` USER
+            {user_prompt}
+            ```
+        """
+        )
+
+    def run(self, prompt: BaseMessage) -> RunResponse:
+        response = self.model.invoke(
+            [{"role": "user", "content": self.prompt(prompt.content)}]
+        )
+        return response
