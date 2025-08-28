@@ -20,6 +20,7 @@ class Project:
     # automatically populated in ``project.config`` to provide a stable API
     # regardless of whether users explicitly set them in ``config.yaml``.
     _RESERVED_CONFIG_DEFAULTS: dict[str, Any] = {
+        "data_fp": None,
         "db_fp": None,
         "conda_fp": None,
         "docker_fp": None,
@@ -33,6 +34,7 @@ class Project:
 
     def __init__(self, path: str | Path):
         self.path = Path(path)
+        self.name = self.path.name
         self.path.mkdir(parents=True, exist_ok=True)
         self.metadata_path = self.path / "metadata.csv"
         self.config_path = self.path / "config.yaml"
