@@ -57,6 +57,7 @@ class Planner:
         response: PlanResponse = self.model.invoke(
             [{"role": "user", "content": self.prompt(prompt.content)}]
         )
+        print("Planner response: ", response)
         return response
 
 
@@ -93,6 +94,7 @@ class Runner:
         response = self.model.invoke(
             [{"role": "user", "content": self.prompt(prompt.content)}]
         )
+        print("Runner response:", response)
         return response
 
 
@@ -127,4 +129,5 @@ class Reporter:
         response = self.model.invoke(
             [{"role": "user", "content": self.prompt(prompt.content)}]
         )
+        print("Reporter response: ", response)
         return response

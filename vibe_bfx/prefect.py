@@ -1,11 +1,12 @@
 import json
 import logging
-from langchain.schema import AIMessage, BaseMessage, HumanMessage
+from langchain.schema import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph
 from pathlib import Path
 from prefect import flow, task
 from typing import List, TypedDict
 from vibe_bfx.agents import Planner, Reporter, Runner
+from vibe_bfx.project import Project
 
 
 class ChatState(TypedDict):
@@ -34,7 +35,9 @@ runner = Runner()
 
 def call_runner(state: ChatState) -> ChatState:
     response = runner.run(state["messages"][-1])
-    msg = HumanMessage(content=json.dumps({"script": response.script, "env": response.env}))
+    msg = HumanMessage(
+        content=json.dumps({"script": response.script, "env": response.env})
+    )
     return {
         **state,
         "messages": state["messages"] + [msg],
@@ -58,8 +61,8 @@ def call_reporter(state: ChatState) -> ChatState:
     }
 
 
-@flow(log_prints=True, flow_run_name="{project}_{task}")
-def do_work(prompt: str, project: str, task: str):
+@flow(log_prints=True, flow_run_name="{project.name}_{task}")
+def do_work(prompt: str, project: Project, task: str):
     logging.info("STARTING WORK")
 
     logging.info("Compiling state graph...")
@@ -78,11 +81,21 @@ def do_work(prompt: str, project: str, task: str):
     app = graph.compile()
 
     print("Graph compiled, invoking planner...")
-    result = app.invoke({"messages": [HumanMessage(content=prompt)], "steps": [], "current_step": 0})
+    result = app.invoke(
+        {
+            "messages": [
+                SystemMessage(content=str(project.config)),
+                SystemMessage(content=str(project.metadata)),
+                HumanMessage(content=prompt),
+            ],
+            "steps": [],
+            "current_step": 0,
+        }
+    )
 
     print("Planner invoked, processing result...")
     messages = result["messages"]
-    task_dir = Path(project) / task
+    task_dir = project.path / task
     task_dir.mkdir(parents=True, exist_ok=True)
     fp = task_dir / "out.txt"
     with fp.open("w", encoding="utf-8") as fh:
