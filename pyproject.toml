@@ -1,21 +1,44 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
-name = "vibe_bfx"
+name = "vibebfx"
 version = "0.1.0"
-description = "Simple agentic vibe bioinformatics framework"
-authors = [{name = "VibeBfx"}]
+description = "DeepAgents-powered bioinformatics workflow orchestration library built on LangChain"
 readme = "README.md"
+authors = [{name = "VibeBfx Team"}]
 requires-python = ">=3.10"
 dependencies = [
-    "prefect>=3.0,<4.0",
-    "langchain>=0.2.0,<1.0.0",
-    "langgraph>=0.2.0,<1.0.0",
-    "langchain-openai>=0.2.0,<1.0.0",
-    "PyYAML>=6.0",
+  "langchain>=1.1,<2.0",
+  "langchain-community>=0.3",
+  "langchain-openai>=0.2.7",
+  "langgraph>=0.2.0",
+  "deepagents>=0.2,<0.3",
+  "pydantic>=2.7",
+  "typer>=0.12",
+  "rich>=13.7",
+]
+
+[project.optional-dependencies]
+bio = [
+  "pandas>=2.2",
+  "numpy>=1.26",
+  "plotly>=5.22",
+]
+
+test = [
+  "pytest>=8.2",
+  "pytest-cov>=5.0",
 ]
 
 [project.scripts]
-vibe-bfx = "vibe_bfx.cli:main"
-vibe-bfx-worker = "vibe_bfx.worker:main"
+vibe-bfx = "vibebfx.cli:app"
 
 [tool.setuptools.packages.find]
-include = ["vibe_bfx*"]
+where = ["src"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-q"
