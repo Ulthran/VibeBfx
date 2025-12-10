@@ -6,16 +6,16 @@ authors = [{name = "VibeBfx"}]
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "prefect>=3.0,<4.0",
-    "langchain>=0.2.0,<1.0.0",
-    "langgraph>=0.2.0,<1.0.0",
-    "langchain-openai>=0.2.0,<1.0.0",
-    "PyYAML>=6.0",
+    "langchain",
+    "langgraph",
+    "langchain-openai",
+    "deepagents",
+    "fastmcp",
+    "biopython",
 ]
 
 [project.scripts]
 vibe-bfx = "vibe_bfx.cli:main"
-vibe-bfx-worker = "vibe_bfx.worker:main"
 
 [tool.setuptools.packages.find]
 include = ["vibe_bfx*"]
